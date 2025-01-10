@@ -24,6 +24,8 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
+.env-*
+.venv
 
 # IDE
 .idea/
@@ -33,9 +35,34 @@ ENV/
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 
 # Streamlit
 .streamlit/
+.streamlit/secrets.toml
+*.streamlit/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+media_uploads/
+
+# Data and logs
+*.csv
+*.xlsx
+*.xls
+*.db
+*.sqlite
+logs/
+*.log
 
 # Misc
 .DS_Store
+Thumbs.db
+*.bak
+*.backup
+*.pyc
+.coverage
+htmlcov/

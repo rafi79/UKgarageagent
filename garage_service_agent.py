@@ -1,6 +1,7 @@
 import os
 import base64
 from typing import Optional, Union, List
+import streamlit as st
 import google.generativeai as genai
 from openai import OpenAI
 import requests
@@ -12,42 +13,64 @@ from geopy.geocoders import Nominatim
 import time
 import json
 
-# API Keys
-OPENAI_KEY = "sk-SX9zeWusVCPndt9SKPx2iDHBWjE-d44V3dlsxHO9ErT3BlbkFJx0eEgu26DA1c2YdEnHmuJ_cSWJAN10vluvvaS0puYA"
-GEMINI_KEY = "AIzaSyCcMZPrzP5me7Rl4pmAc1Nn5vUDSan5Q6E"
-PERPLEXITY_KEY = "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"
-
 class GarageServiceAgent:
     def __init__(self, csv_file):
         """Initialize the multi-model garage service agent"""
         print("Initializing Garage Service Agent...")
-        self.garages_df = pd.read_csv(csv_file)
-        self.geolocator = Nominatim(user_agent="garage_service_agent")
-        self.geocoded_locations = {}
-        
-        # Initialize models and prepare TF-IDF
-        self.setup_models()
-        self.prepare_text_similarity()
-        print("Initialization complete!")
+        try:
+            self.garages_df = pd.read_csv(csv_file)
+            self.geolocator = Nominatim(user_agent="garage_service_agent")
+            self.geocoded_locations = {}
+            
+            # Initialize models and prepare TF-IDF
+            self.setup_models()
+            self.prepare_text_similarity()
+            print("Initialization complete!")
+            
+        except Exception as e:
+            error_msg = f"Failed to initialize Garage Service Agent: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.error(error_msg)
+            raise
     
     def setup_models(self):
-        """Initialize all AI models"""
-        # Setup GPT Mini as main agent
-        self.gpt_client = OpenAI(api_key=OPENAI_KEY)
-        
-        # Setup Gemini for media analysis
-        genai.configure(api_key=GEMINI_KEY)
-        self.gemini_model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config={
-                "top_p": 0.95,
-                "top_k": 40,
-            }
-        )
-        
-        # Setup Perplexity for service verification
-        self.perplexity_api_key = PERPLEXITY_KEY
-        self.perplexity_url = "https://api.perplexity.ai/chat/completions"
+        """Initialize all AI models with secure key management"""
+        try:
+            # Validate that required secrets exist
+            if "api_keys" not in st.secrets:
+                raise ValueError("API keys section not found in Streamlit secrets")
+                
+            required_keys = ["OPENAI_KEY", "GEMINI_KEY", "PERPLEXITY_KEY"]
+            missing_keys = [key for key in required_keys if key not in st.secrets["api_keys"]]
+            
+            if missing_keys:
+                raise ValueError(f"Missing required API keys: {', '.join(missing_keys)}")
+            
+            # Setup OpenAI (GPT) as main agent
+            self.gpt_client = OpenAI(api_key=st.secrets["api_keys"]["OPENAI_KEY"])
+            
+            # Setup Gemini for media analysis
+            genai.configure(api_key=st.secrets["api_keys"]["GEMINI_KEY"])
+            self.gemini_model = genai.GenerativeModel(
+                model_name="gemini-1.5-flash",
+                generation_config={
+                    "top_p": 0.95,
+                    "top_k": 40,
+                }
+            )
+            
+            # Setup Perplexity for service verification
+            self.perplexity_api_key = st.secrets["api_keys"]["PERPLEXITY_KEY"]
+            self.perplexity_url = "https://api.perplexity.ai/chat/completions"
+            
+        except Exception as e:
+            error_msg = f"Error setting up API clients: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.error(error_msg)
+                st.info("Please ensure all API keys are properly configured in Streamlit secrets.")
+            raise
 
     def prepare_text_similarity(self):
         """Prepare TF-IDF vectors for text similarity matching"""
@@ -63,7 +86,7 @@ class GarageServiceAgent:
         self.tfidf_matrix = self.tfidf.fit_transform(self.garages_df['search_text'])
 
     def analyze_query_with_gpt(self, query: str, location: str) -> dict:
-        """Main agent: GPT Mini analyzes query and coordinates other models"""
+        """Main agent: GPT analyzes query and coordinates other models"""
         try:
             prompt = f"""
             Analyze this car service request and coordinate the response.
@@ -100,7 +123,10 @@ class GarageServiceAgent:
                 }
                 
         except Exception as e:
-            print(f"GPT analysis error: {e}")
+            error_msg = f"GPT analysis error: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.warning("Error during analysis, using fallback response")
             return {
                 "problem_type": "Service Request",
                 "urgency_level": "Medium",
@@ -175,7 +201,10 @@ class GarageServiceAgent:
                     return response.text
                     
         except Exception as e:
-            print(f"Media analysis error: {e}")
+            error_msg = f"Media analysis error: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.error(error_msg)
             return f"Could not analyze {media_type}: {str(e)}"
 
     def analyze_distance_with_gemini(self, user_location: str, garage_location: str, distance: float) -> str:
@@ -211,7 +240,10 @@ class GarageServiceAgent:
             return response.text
             
         except Exception as e:
-            print(f"Distance analysis error: {e}")
+            error_msg = f"Distance analysis error: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.warning(error_msg)
             return "Distance analysis not available"
 
     def verify_services_with_perplexity(self, garage: dict, required_services: List[str]) -> dict:
@@ -255,14 +287,17 @@ class GarageServiceAgent:
                 }
                 
         except Exception as e:
-            print(f"Service verification error: {e}")
+            error_msg = f"Service verification error: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.warning(error_msg)
             return {
                 "has_required_services": True,
                 "available_services": required_services,
                 "service_notes": "Error verifying services, please contact garage directly"
             }
 
-    def find_similar_locations(self, query, n=5):
+    def find_similar_locations(self, query: str, n: int = 5) -> List[dict]:
         """Find similar locations using TFIDF"""
         query_vector = self.tfidf.transform([query])
         similarities = cosine_similarity(query_vector, self.tfidf_matrix)
@@ -297,7 +332,6 @@ class GarageServiceAgent:
                         distance = geodesic(user_coords, garage_coords).kilometers
                         if max_distance is None or distance <= max_distance:
                             garage['distance'] = distance
-                            # Add Gemini's distance analysis
                             garage['distance_analysis'] = self.analyze_distance_with_gemini(
                                 location, 
                                 garage['address'], 
@@ -311,18 +345,21 @@ class GarageServiceAgent:
                 results = similar_garages[:num_results]
                 
         except Exception as e:
-            print(f"Error finding garages: {e}")
+            error_msg = f"Error finding garages: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.warning(error_msg)
             results = similar_garages[:num_results]
             
         return results
 
-    def geocode_location(self, address):
+    def geocode_location(self, address: str) -> Optional[tuple]:
         """Geocode location with caching and retries"""
         if address in self.geocoded_locations:
             return self.geocoded_locations[address]
             
         try:
-            time.sleep(1)
+            time.sleep(1)  # Rate limiting
             location = self.geolocator.geocode(
                 address,
                 timeout=10
@@ -331,10 +368,11 @@ class GarageServiceAgent:
                 coords = (location.latitude, location.longitude)
                 self.geocoded_locations[address] = coords
                 return coords
+                
         except Exception as e:
             print(f"Geocoding error: {e}")
             try:
-                time.sleep(2)
+                time.sleep(2)  # Longer wait for retry
                 location = self.geolocator.geocode(
                     address,
                     timeout=15
@@ -345,25 +383,35 @@ class GarageServiceAgent:
                     return coords
             except Exception as retry_e:
                 print(f"Geocoding retry error: {retry_e}")
-                
-        return None
-
-    def handle_request(self, 
+                def handle_request(self, 
                       query: Optional[str] = None,
                       media_path: Optional[str] = None,
                       media_type: Optional[str] = None,
                       location: str = None,
                       num_results: int = 5,
                       max_distance: Optional[float] = None) -> dict:
-        """Main request handler with GPT Mini as coordinator"""
+        """Main request handler with GPT as coordinator"""
         try:
-            print("Analyzing request...")
+            if st.runtime.exists():
+                st.write("Analyzing request...")
+            else:
+                print("Analyzing request...")
+
             if query:
                 analysis = self.analyze_query_with_gpt(query, location)
             elif media_path:
-                print(f"Analyzing {media_type} with Gemini...")
+                if st.runtime.exists():
+                    st.write(f"Analyzing {media_type} with Gemini...")
+                else:
+                    print(f"Analyzing {media_type} with Gemini...")
+                    
                 media_analysis = self.analyze_media_with_gemini(media_path, media_type)
-                print("Processing Gemini analysis with GPT Mini...")
+                
+                if st.runtime.exists():
+                    st.write("Processing Gemini analysis with GPT...")
+                else:
+                    print("Processing Gemini analysis with GPT...")
+                    
                 analysis = self.analyze_query_with_gpt(media_analysis, location)
             else:
                 raise ValueError("Query or media input required")
@@ -371,10 +419,18 @@ class GarageServiceAgent:
             if not analysis:
                 raise ValueError("Analysis failed")
 
-            print("Finding suitable garages...")
+            if st.runtime.exists():
+                st.write("Finding suitable garages...")
+            else:
+                print("Finding suitable garages...")
+                
             garages = self.find_garages(location, num_results * 2, max_distance)
 
-            print("Verifying services...")
+            if st.runtime.exists():
+                st.write("Verifying services...")
+            else:
+                print("Verifying services...")
+                
             verified_garages = []
             for garage in garages:
                 if garage.get('website') and garage['website'] != 'No Website':
@@ -389,7 +445,11 @@ class GarageServiceAgent:
                 if len(verified_garages) >= num_results:
                     break
 
-            print("Generating final recommendation...")
+            if st.runtime.exists():
+                st.write("Generating final recommendation...")
+            else:
+                print("Generating final recommendation...")
+                
             recommendation_prompt = f"""
             Based on this analysis, provide a helpful recommendation:
             Problem Analysis: {json.dumps(analysis, indent=2)}
@@ -416,17 +476,26 @@ class GarageServiceAgent:
             }
 
         except Exception as e:
-            print(f"Request handling error: {e}")
+            error_msg = f"Request handling error: {str(e)}"
+            print(error_msg)
+            if st.runtime.exists():
+                st.error(error_msg)
             return {"error": str(e)}
 
+# Optional main function for testing
 def main():
-    """Interactive garage service agent"""
+    """Interactive garage service agent testing"""
+    if st.runtime.exists():
+        st.error("This script should be imported, not run directly in Streamlit")
+        return
+        
     print("\nWelcome to the Garage Service Agent")
     print("=================================")
     print("I can help you find automotive services in your area.")
     
     try:
-        agent = GarageServiceAgent('/kaggle/input/uk-garage-dataset/Garage in UK - Sheet1.csv')
+        # For testing, you should provide a path to your test CSV file
+        agent = GarageServiceAgent('path/to/your/test/garage_data.csv')
         
         while True:
             print("\nHow can I help you today?")

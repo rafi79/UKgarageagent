@@ -1,6 +1,6 @@
 # 🚗 UK Garage Service Agent
 
-An intelligent multi-model system that helps users find and connect with automotive service providers in the UK. The system uses GPT, Gemini, and Perplexity AI to analyze service requests, process media inputs, and provide tailored garage recommendations.
+An intelligent multi-model system that helps users find and connect with automotive service providers in the UK. The system uses GPT, Gemini,TF-IDF and Perplexity AI to analyze service requests, process media inputs, and provide tailored garage recommendations.
 
 ## ✨ Features
 
@@ -18,7 +18,8 @@ An intelligent multi-model system that helps users find and connect with automot
   - Special considerations detection
 
 - **Location-Based Garage Finding**
-  - Text similarity matching
+  - TF-IDF based text similarity matching
+  - Intelligent location matching using n-gram features
   - Geolocation-based distance calculation
   - Travel time and convenience analysis
   - Multi-factor garage ranking
@@ -110,6 +111,22 @@ The web interface provides:
 
 ## 📊 Data Structure
 
+### TF-IDF Implementation
+The system uses TF-IDF (Term Frequency-Inverse Document Frequency) vectorization to enable intelligent garage matching:
+
+- **Text Preprocessing**
+  - Combines garage name, location, city, and postcode
+  - Removes stop words
+  - Generates n-grams (1-2 words)
+  - Creates sparse matrix representation
+
+- **Similarity Matching**
+  - Converts user queries into TF-IDF vectors
+  - Computes cosine similarity with garage vectors
+  - Ranks matches by similarity score
+  - Supports partial and fuzzy matching
+
+### Garage Database
 The garage database CSV should include the following columns:
 - Garage Name
 - Location
@@ -129,7 +146,10 @@ The system operates in three main stages:
    - Location validation
 
 2. **Garage Matching**
-   - Text similarity computation
+   - TF-IDF vectorization for text similarity
+   - N-gram feature extraction (1-2 grams)
+   - Cosine similarity computation
+   - Stop word filtering
    - Geolocation processing
    - Distance calculation
    - Travel analysis
